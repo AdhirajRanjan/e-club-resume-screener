@@ -10,7 +10,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Use Node 22 or 24. For real local Auth, Postgres and Storage, start Docker and run `npx supabase start` from this directory. The CLI applies the migrations and prints the API URL and keys for `.env.local`. Use the local mail inbox at `http://localhost:54324` to open magic links in the requesting browser. Use a synthetic account at the configured domain. A separate hosted Supabase project also works for development.
+Use Node 22 or 24. For real local Auth, Postgres and Storage, use Supabase CLI v3 with a running Docker-compatible engine and run `npx supabase start` from this directory. The CLI applies the migrations and prints the API URL and keys for `.env.local`. Use the local mail inbox at `http://localhost:54324` to open magic links in the requesting browser. Use a synthetic account at the configured domain. A separate hosted Supabase project also works for development.
 
 ```sh
 npm run typecheck
@@ -23,7 +23,7 @@ Tests run the production migrations on PostgreSQL via PGlite, parse synthetic PD
 
 ## Configure Supabase and sign-in
 
-1. Create a Supabase Free project. From this checkout, run `npx supabase login`, `npx supabase link --project-ref YOUR_PROJECT_REF` and `npx supabase db push`. The migrations create the private `resumes` bucket, RLS policies, transactional jobs, rate limiter, reviewer records, and shortlist query.
+1. Create a Supabase Free project. From this checkout, run `npx supabase login`, `npx supabase link --project-ref YOUR_PROJECT_REF` and `npx supabase db push --remote --dry-run`. Review the pending migrations, then run `npx supabase db push --remote` for the linked project. The migrations create the private `resumes` bucket, RLS policies, transactional jobs, rate limiter, reviewer records, and shortlist query.
 2. In Auth URL Configuration, set the canonical **Site URL** to your app origin and allow exactly `https://YOUR_APP_HOST/auth/callback`. For local development with hosted Supabase, add `http://localhost:3000/auth/callback` to that project's redirect list. Keep signup and confirmed email enabled. Leave the normal magic-link confirmation template in place so Supabase returns a PKCE code. Avoid SMTP link tracking.
 3. For Google, have the campus Google Workspace administrator approve or create a Web OAuth client. Use Internal audience where available. Set **Authorized JavaScript origin** to the app origin and **Authorized redirect URI** to `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback`. Save the Google client ID and secret in Supabase Auth → Providers → Google, enable Google there, then set `GOOGLE_OAUTH_ENABLED=true` in the app. App and database access verify the configured email domain. [Google sign-in setup](https://supabase.com/docs/guides/auth/social-sign-in/auth-google)
 4. For hosted magic links, keep the Email provider enabled and configure **custom SMTP**. Supabase’s default mail service delivers only to project team addresses. Use a campus-managed relay or a free transactional SMTP plan with a sender domain you already control. Resend currently lists 100 messages/day and 3,000/month on Free. Confirm sender DNS records, configure Supabase SMTP credentials and Auth rate limits, then test with a non-team campus inbox. [Supabase SMTP](https://supabase.com/docs/guides/auth/auth-smtp) · [Resend pricing](https://resend.com/pricing)
