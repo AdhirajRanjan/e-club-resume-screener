@@ -21,6 +21,10 @@ npm run build
 
 Tests run the production migrations on PostgreSQL via PGlite, parse synthetic PDFs with PDF.js, and mock model and service responses at test boundaries. They do not require hosted services.
 
+## Read-only web demo
+
+Set `DEMO_MODE=true` in the hosting environment for a public demonstration without Supabase credentials. The app serves synthetic project and reviewer examples, and server-side backend access is disabled. Leave `DEMO_MODE` unset or false for the connected MVP.
+
 ## Configure Supabase and sign-in
 
 1. Create a Supabase Free project. From this checkout, run `npx supabase login`, `npx supabase link --project-ref YOUR_PROJECT_REF` and `npx supabase db push --remote --dry-run`. Review the pending migrations, then run `npx supabase db push --remote` for the linked project. The migrations create the private `resumes` bucket, RLS policies, transactional jobs, rate limiter, reviewer records, and shortlist query.

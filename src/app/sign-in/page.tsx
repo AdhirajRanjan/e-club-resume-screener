@@ -4,11 +4,12 @@ import { signInGoogle } from "@/app/actions";
 import { MagicForm, SubmitButton } from "@/components/forms";
 import { Brand } from "@/components/ui";
 import { homeFor, session } from "@/lib/auth";
-import { authorizedDomain, publicConfig } from "@/lib/config";
+import { authorizedDomain, demoEnabled, publicConfig } from "@/lib/config";
 
 export const metadata = { title: "Sign in" };
 
 export default async function SignIn({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  if (demoEnabled()) redirect("/demo");
   const existing = await session();
   if (existing) redirect(homeFor(existing.profile.role));
   const code = (await searchParams).error;

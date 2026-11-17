@@ -11,6 +11,8 @@ const { userDb, serviceDb, redirect } = vi.hoisted(() => ({
 vi.mock("@/lib/db", () => ({ userDb, serviceDb }));
 vi.mock("next/navigation", () => ({ redirect }));
 
+import { POST as screen } from "@/app/api/internal/screen/route";
+import { GET as callback } from "@/app/auth/callback/route";
 import { requireSession } from "@/lib/auth";
 import { POST as start } from "@/app/api/uploads/start/route";
 import { POST as submit } from "@/app/api/uploads/submit/route";
@@ -49,6 +51,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.unstubAllGlobals();
   vi.stubEnv("APP_URL", origin);
+  vi.stubEnv("DEMO_MODE", "false");
   vi.stubEnv("AUTHORIZED_EMAIL_DOMAIN", "ashoka.edu.in");
   vi.stubEnv("MAX_RESUME_MB", "10");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://database.example.invalid");
@@ -56,6 +59,21 @@ beforeEach(() => {
 });
 
 describe("server guards", () => {
+  it("keeps demo requests away from authentication, storage, export and the worker even with credentials configured", async () => {
+    vi.stubEnv("DEMO_MODE", "true");
+    const bearer = "synthetic-test-worker-secret".repeat(2);
+    vi.stubEnv("CRON_SECRET", bearer);
+    const payload = { projectId, size: 200, mediaType: "application/pdf" };
+    expect((await start(post("/api/uploads/start", payload))).status).toBe(403);
+    expect((await submit(post("/api/uploads/submit", {}))).status).toBe(403);
+    expect((await exportShortlist(new Request(origin), { params: Promise.resolve({ id: projectId }) })).status).toBe(403);
+    const result = await callback(new Request("https://demo.example.invalid/auth/callback"));
+    expect(result.headers.get("location")).toBe("https://demo.example.invalid/demo");
+    expect((await screen(new Request(origin, { method: "POST", headers: { Authorization: `Bearer ${bearer}` } }))).status).toBe(404);
+    expect(userDb).not.toHaveBeenCalled();
+    expect(serviceDb).not.toHaveBeenCalled();
+  });
+
   it("routes an authenticated applicant away from reviewer pages", async () => {
     claim("applicant");
     await expect(requireSession("reviewer")).rejects.toThrow("redirect:/projects");

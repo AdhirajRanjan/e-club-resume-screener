@@ -201,3 +201,5 @@ summary { font-weight: 700; }
   .navigation a { font-size: .76rem; }
 }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+.demo-notice { margin-top: 1rem; }

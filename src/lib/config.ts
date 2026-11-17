@@ -9,7 +9,12 @@ export function allowedEmail(email: string | undefined) {
   return !!parts?.[0] && parts.length === 2 && parts[1] === authorizedDomain();
 }
 
+export function demoEnabled() {
+  return process.env.DEMO_MODE === "true";
+}
+
 export function publicConfig() {
+  if (demoEnabled()) return null;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   return url && key ? { url, key } : null;

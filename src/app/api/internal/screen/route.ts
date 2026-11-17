@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { demoEnabled } from "@/lib/config";
 import { serviceDb } from "@/lib/db";
 import { jsonError } from "@/lib/http";
 import { processCleanup, processScreening } from "@/lib/worker";
@@ -8,6 +9,7 @@ export const runtime = "nodejs";
 export const maxDuration = 55;
 
 export async function POST(request: Request) {
+  if (demoEnabled()) return jsonError("Screening is unavailable in read-only demo mode.", 404);
   const secret = process.env.CRON_SECRET;
   const received = Buffer.from(request.headers.get("authorization") || "");
   const expected = Buffer.from(`Bearer ${secret || ""}`);
