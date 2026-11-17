@@ -1,0 +1,18 @@
+import { allowedEmail, appUrl, publicConfig } from "@/lib/config";
+import { userDb } from "@/lib/db";
+
+export async function GET(request: Request) {
+  const target = (path: string) => Response.redirect(new URL(path, appUrl()), 303);
+  if (!publicConfig()) return target("/sign-in?error=unavailable");
+  const { searchParams } = new URL(request.url);
+  const code = searchParams.get("code");
+  const db = await userDb();
+  const result = code ? await db.auth.exchangeCodeForSession(code) : null;
+
+  if (result?.error || !result?.data.user) return target("/sign-in?error=callback");
+  if (!result.data.user.email_confirmed_at || !allowedEmail(result.data.user.email)) {
+    await db.auth.signOut({ scope: "local" });
+    return target("/sign-in?error=domain");
+  }
+  return target("/");
+}

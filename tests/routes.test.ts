@@ -1,0 +1,142 @@
+import { randomUUID } from "node:crypto";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fixturePdf } from "./fixtures/pdf";
+
+vi.mock("server-only", () => ({}));
+const { userDb, serviceDb, redirect } = vi.hoisted(() => ({
+  userDb: vi.fn(),
+  serviceDb: vi.fn(),
+  redirect: vi.fn((destination: string) => { throw new Error(`redirect:${destination}`); }),
+}));
+vi.mock("@/lib/db", () => ({ userDb, serviceDb }));
+vi.mock("next/navigation", () => ({ redirect }));
+
+import { requireSession } from "@/lib/auth";
+import { POST as start } from "@/app/api/uploads/start/route";
+import { POST as submit } from "@/app/api/uploads/submit/route";
+import { GET as exportShortlist } from "@/app/(workspace)/reviewer/[id]/export/route";
+import { GET as openResume } from "@/app/(workspace)/reviewer/[id]/applicants/[applicationId]/resume/route";
+
+const projectId = randomUUID();
+const applicationId = randomUUID();
+const studentId = randomUUID();
+const origin = "http://localhost:3000";
+const path = `${studentId}/${projectId}/${randomUUID()}.pdf`;
+
+function claim(role: "applicant" | "reviewer", email = "test@ashoka.edu.in", confirmed = true) {
+  const filters = {
+    eq: vi.fn().mockReturnThis(), select: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({
+      data: { id: studentId, email, name: "Synthetic", role, student_id: "TEST" },
+    }),
+  };
+  const db = {
+    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: studentId, email, email_confirmed_at: confirmed ? "confirmed" : null } } }) },
+    from: vi.fn().mockReturnValue(filters),
+    rpc: vi.fn(),
+  };
+  userDb.mockResolvedValue(db);
+  return db;
+}
+
+function post(url: string, body: unknown, requestOrigin = origin) {
+  return new Request(`${origin}${url}`, {
+    method: "POST", headers: { "Content-Type": "application/json", Origin: requestOrigin },
+    body: JSON.stringify(body),
+  });
+}
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.unstubAllGlobals();
+  vi.stubEnv("APP_URL", origin);
+  vi.stubEnv("AUTHORIZED_EMAIL_DOMAIN", "ashoka.edu.in");
+  vi.stubEnv("MAX_RESUME_MB", "10");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://database.example.invalid");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "test-only-publishable");
+});
+
+describe("server guards", () => {
+  it("routes an authenticated applicant away from reviewer pages", async () => {
+    claim("applicant");
+    await expect(requireSession("reviewer")).rejects.toThrow("redirect:/projects");
+  });
+
+  it("requires a confirmed campus email even if a profile exists", async () => {
+    claim("reviewer", "person@elsewhere.invalid");
+    await expect(requireSession("reviewer")).rejects.toThrow("redirect:/sign-in");
+    claim("reviewer", "test@ashoka.edu.in", false);
+    await expect(requireSession("reviewer")).rejects.toThrow("redirect:/sign-in");
+  });
+
+  it("rejects applicants from CSV and resume routes without using privileged storage", async () => {
+    claim("applicant");
+    expect((await exportShortlist(new Request(origin), { params: Promise.resolve({ id: projectId }) })).status).toBe(403);
+    expect((await openResume(new Request(origin), { params: Promise.resolve({ id: projectId, applicationId }) })).status).toBe(403);
+    expect(serviceDb).not.toHaveBeenCalled();
+  });
+
+  it("returns a genuine Excel-compatible attachment for a successful authorized export", async () => {
+    const { rpc } = claim("reviewer");
+    const range = vi.fn().mockResolvedValue({ data: [{ name: "Synthetic", note: "=formula" }] });
+    rpc.mockReturnValue({ range });
+    const response = await exportShortlist(new Request(origin), { params: Promise.resolve({ id: projectId }) });
+    expect(rpc).toHaveBeenCalledWith("shortlist_csv_rows", { p_project: projectId });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-disposition")).toContain("attachment");
+    expect(await response.text()).toContain('"\'=formula"');
+  });
+});
+
+describe("upload API", () => {
+  it("rejects cross-origin requests, non-PDF MIME types and oversized uploads before issuing a signed upload", async () => {
+    claim("applicant");
+    const body = { projectId, size: 200, mediaType: "application/pdf" };
+    expect((await start(post("/api/uploads/start", body, "https://other.example.invalid"))).status).toBe(403);
+    expect((await start(post("/api/uploads/start", { ...body, mediaType: "image/png" }))).status).toBe(400);
+    expect((await start(post("/api/uploads/start", { ...body, size: 10485761 }))).status).toBe(413);
+    expect(serviceDb).not.toHaveBeenCalled();
+  });
+
+  it("issues a signed non-upserting upload for the authenticated applicant", async () => {
+    claim("applicant");
+    const createSignedUploadUrl = vi.fn().mockResolvedValue({ data: { token: "test-only-token" } });
+    const rpc = vi.fn().mockResolvedValue({ data: path });
+    serviceDb.mockReturnValue({ rpc, storage: { from: () => ({ createSignedUploadUrl }) } });
+    const response = await start(post("/api/uploads/start", { projectId, size: 200, mediaType: "application/pdf" }));
+    expect(await response.json()).toEqual({ path, token: "test-only-token" });
+    expect(rpc).toHaveBeenCalledWith("begin_resume_upload", { p_user: studentId, p_project: projectId });
+    expect(createSignedUploadUrl).toHaveBeenCalledWith(path, { upsert: false });
+  });
+
+  function storageResponse(bytes: Uint8Array | string) {
+    claim("applicant");
+    const rpc = vi.fn().mockResolvedValue({ data: applicationId });
+    const ticket = {
+      select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: { created_at: new Date().toISOString(), finalized_at: null } }),
+    };
+    const bucket = { createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: "https://storage.example.invalid/signed" } }) };
+    serviceDb.mockReturnValue({ rpc, from: () => ticket, storage: { from: () => bucket } });
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () =>
+      new Response(typeof bytes === "string" ? bytes : Uint8Array.from(bytes), { headers: { "content-type": "application/pdf" } })));
+    return rpc;
+  }
+
+  const submitted = { projectId, path, expectedVersion: 0, questions: [], answers: [], links: [] };
+
+  it("validates real PDF bytes before persisting the application", async () => {
+    const rpc = storageResponse(fixturePdf());
+    const response = await submit(post("/api/uploads/submit", submitted));
+    expect(await response.json()).toEqual({ id: applicationId });
+    expect(rpc).toHaveBeenCalledWith("submit_resume", {
+      p_user: studentId, p_project: projectId, p_path: path, p_expected_version: 0,
+      p_question_snapshot: [], p_answers: [], p_links: [],
+    });
+  });
+
+  it("rejects fake PDF bytes despite a PDF content type and never commits the application", async () => {
+    const rpc = storageResponse("%PDF-1.7\nrogue data\n%%EOF\n");
+    expect((await submit(post("/api/uploads/submit", submitted))).status).toBe(415);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});
