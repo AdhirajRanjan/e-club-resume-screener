@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
-import { allowedEmail, appUrl, authorizedDomain, publicConfig } from "@/lib/config";
+import { allowedEmail, appUrl, authorizedDomain, magicLinkEnabled, publicConfig } from "@/lib/config";
 import { serviceDb, userDb } from "@/lib/db";
 import { relevantCriteria } from "@/lib/evaluation";
 import { databaseMessage } from "@/lib/http";
@@ -13,9 +13,9 @@ import { decisionSchema, idSchema, profileSchema, projectSchema } from "@/lib/sc
 export type FormState = { error?: string; success?: string };
 
 export async function sendMagicLink(_: FormState, form: FormData): Promise<FormState> {
+  if (!magicLinkEnabled()) return { error: "Email sign-in is unavailable." };
   const email = z.email().safeParse(String(form.get("email") || "").trim().toLowerCase());
   if (!email.success || !allowedEmail(email.data)) return { error: `Enter a valid @${authorizedDomain()} email address.` };
-  if (!publicConfig()) return { error: "Sign-in is unavailable until Supabase is configured." };
   const db = await userDb();
   const { error } = await db.auth.signInWithOtp({
     email: email.data, options: { emailRedirectTo: `${appUrl()}/auth/callback` },

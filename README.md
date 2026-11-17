@@ -51,6 +51,7 @@ The default domain is `ashoka.edu.in`. If the university authorizes a different 
 | `SUPABASE_SECRET_KEY` | Secret or legacy service-role key. Set only on the server. |
 | `APP_URL` | Exact canonical app origin. The local default is `http://localhost:3000`. |
 | `AUTHORIZED_EMAIL_DOMAIN`, `GOOGLE_OAUTH_ENABLED` | Campus domain matching SQL settings and optional Google toggle. |
+| `EMAIL_MAGIC_LINK_ENABLED` | Keep false for an OAuth-only production deployment. Enable after verifying an email delivery provider. |
 | `MAX_RESUME_MB` | Default 10, range 1–25. Configure `resumes` bucket and project Storage limits to the same byte limit when changing it. |
 | `APPLICATION_RETENTION_DAYS` | Default 180, range 1–3,650, measured from the project deadline. Set the club’s approved retention period before launch. |
 | `CRON_SECRET` | Worker bearer secret. Generate using `openssl rand -hex 32`. |

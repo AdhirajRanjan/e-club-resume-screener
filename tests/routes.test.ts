@@ -11,6 +11,7 @@ const { userDb, serviceDb, redirect } = vi.hoisted(() => ({
 vi.mock("@/lib/db", () => ({ userDb, serviceDb }));
 vi.mock("next/navigation", () => ({ redirect }));
 
+import { sendMagicLink } from "@/app/actions";
 import { POST as screen } from "@/app/api/internal/screen/route";
 import { GET as callback } from "@/app/auth/callback/route";
 import { requireSession } from "@/lib/auth";
@@ -52,6 +53,7 @@ beforeEach(() => {
   vi.unstubAllGlobals();
   vi.stubEnv("APP_URL", origin);
   vi.stubEnv("DEMO_MODE", "false");
+  vi.stubEnv("EMAIL_MAGIC_LINK_ENABLED", "true");
   vi.stubEnv("AUTHORIZED_EMAIL_DOMAIN", "ashoka.edu.in");
   vi.stubEnv("MAX_RESUME_MB", "10");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://database.example.invalid");
@@ -59,6 +61,14 @@ beforeEach(() => {
 });
 
 describe("server guards", () => {
+  it("blocks magic link requests when email delivery is disabled", async () => {
+    vi.stubEnv("EMAIL_MAGIC_LINK_ENABLED", "false");
+    const form = new FormData();
+    form.set("email", "test@ashoka.edu.in");
+    expect(await sendMagicLink({}, form)).toEqual({ error: "Email sign-in is unavailable." });
+    expect(userDb).not.toHaveBeenCalled();
+  });
+
   it("keeps demo requests away from authentication, storage, export and the worker even with credentials configured", async () => {
     vi.stubEnv("DEMO_MODE", "true");
     const bearer = "synthetic-test-worker-secret".repeat(2);

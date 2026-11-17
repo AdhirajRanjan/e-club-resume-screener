@@ -4,7 +4,7 @@ import { signInGoogle } from "@/app/actions";
 import { MagicForm, SubmitButton } from "@/components/forms";
 import { Brand } from "@/components/ui";
 import { homeFor, session } from "@/lib/auth";
-import { authorizedDomain, demoEnabled, publicConfig } from "@/lib/config";
+import { authorizedDomain, demoEnabled, magicLinkEnabled, publicConfig } from "@/lib/config";
 
 export const metadata = { title: "Sign in" };
 
@@ -14,6 +14,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
   if (existing) redirect(homeFor(existing.profile.role));
   const code = (await searchParams).error;
   const enabled = !!publicConfig();
+  const email = magicLinkEnabled();
   const google = enabled && process.env.GOOGLE_OAUTH_ENABLED === "true";
   return <main id="main-content" className="sign-in">
     <div className="sign-in-intro">
@@ -31,13 +32,14 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
         <h2>Sign in</h2>
         <p>Use your Ashoka University email to access the project portal.</p>
         {!enabled && <div className="notice" role="status">Sign-in is unavailable until the portal is connected to Supabase.</div>}
+        {enabled && !email && !google && <div className="notice" role="status">Campus sign-in is temporarily unavailable.</div>}
         {code && <div className="notice notice-error" role="alert">{code === "domain"
           ? `Sign in with your @${authorizedDomain()} account.`
-          : "We couldn’t sign you in. Request a new link or try again."}</div>}
+          : "We couldn’t sign you in. Please try again."}</div>}
         {google && <><form action={signInGoogle}><SubmitButton secondary busy="Connecting…">Continue with Google</SubmitButton></form>
-          <div className="divider"><span>or use email</span></div></>}
-        <MagicForm domain={authorizedDomain()} enabled={enabled} />
-        <small>First time here? A campus sign-in creates your account.</small>
+          {email && <div className="divider"><span>or use email</span></div>}</>}
+        {email && <MagicForm domain={authorizedDomain()} enabled={enabled} />}
+        {(email || google) && <small>First time here? A campus sign-in creates your account.</small>}
       </div>
     </div>
   </main>;
