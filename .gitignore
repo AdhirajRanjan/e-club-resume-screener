@@ -4,10 +4,27 @@ coverage/
 *.tsbuildinfo
 .env*
 !.env.example
+!.env.production.example
 .vercel/
 .DS_Store
 next-env.d.ts
 supabase/.temp/
 supabase/.branches/
 
-/synthetic.pdf
+# Resumes, local database files, dumps, and private key material
+*.pdf
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.dump
+*.sql.gz
+*.pem
+*.key
+*.p12
+*.pfx
+/private-resumes/
+/resumes/
+/backups/
