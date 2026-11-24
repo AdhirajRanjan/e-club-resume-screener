@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BriefcaseBusiness, ClipboardList, LayoutDashboard, UserRound } from "lucide-react";
+import { BriefcaseBusiness, ClipboardList, LayoutDashboard, UserRound, UsersRound } from "lucide-react";
 
 export function Navigation({ reviewer }: { reviewer: boolean }) {
   const path = usePathname();
   const nav = reviewer
-    ? [{ href: "/reviewer", label: "Reviewer dashboard", icon: LayoutDashboard }]
+    ? [{ href: "/reviewer", label: "Reviewer dashboard", icon: LayoutDashboard },
+      { href: "/dash", label: "Project matching", icon: UsersRound }]
     : [{ href: "/projects", label: "Explore projects", icon: BriefcaseBusiness },
       { href: "/applications", label: "My applications", icon: ClipboardList }];
   return <nav aria-label="Main navigation" className="navigation">
